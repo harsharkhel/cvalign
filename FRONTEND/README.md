@@ -31,8 +31,14 @@ See `INTEGRATION.md` in the **cvalign** backend repo for full setup and troubles
 | `VITE_API_BASE_URL` | API base (`/api` uses Vite proxy → `localhost:8000`) |
 | `GEMINI_API_KEY` | Optional; AI Studio / Gemini features |
 
-## Scripts
+## Deploy on Vercel
 
-- `npm run dev` — Vite on port 3000 with `/api` proxy
+1. Import the **cvalign** repo (or **FRONTEND** repo).
+2. Set **Root Directory** to `FRONTEND` (monorepo) or `.` (standalone frontend repo).
+3. Framework preset: **Vite**. Output directory: **`dist`** (default).
+4. Add environment variables from `.env.example` (especially `VITE_*` — they are baked in at build time).
+5. For production, set `VITE_API_BASE_URL` to your live FastAPI URL (not `/api`). The `/api` proxy only exists in `npm run dev`.
+6. `vercel.json` rewrites all routes to `index.html` so refreshes and paths like `/auth/callback` do not return 404.
+
 - `npm run build` — production build
 - `npm run lint` — TypeScript check
