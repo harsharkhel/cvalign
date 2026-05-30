@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.login_log import LoginLog, LoginProvider, LoginStatus
 from app.models.user import AuthProvider, User, UserRole
 from app.schemas.auth_schema import LoginRequest, RegisterRequest
+from app.services.dashboard_service import create_dashboard_snapshot
 from app.utils.jwt_handler import build_token_payload, create_access_token
 from app.utils.security import hash_password, verify_password
 
@@ -62,6 +63,8 @@ def register_user(
     db.commit()
     db.refresh(user)
 
+    create_dashboard_snapshot(db, user.id)
+
     _log_login(
         db, user.email, LoginProvider.local, LoginStatus.success, user.id, ip_address, device_info
     )
@@ -102,6 +105,8 @@ def login_user(
     db.commit()
     db.refresh(user)
 
+    create_dashboard_snapshot(db, user.id)
+
     _log_login(
         db, user.email, LoginProvider.local, LoginStatus.success, user.id, ip_address, device_info
     )
@@ -133,3 +138,5 @@ def seed_admin_if_configured(db: Session, admin_email: str, admin_password: str)
     )
     db.add(user)
     db.commit()
+    db.refresh(user)
+    create_dashboard_snapshot(db, user.id)

@@ -28,6 +28,7 @@ def get_db():
 def init_db():
     from app.models import (  # noqa: F401
         ai_chat_message,
+        dashboard_snapshot,
         job,
         job_recommendation,
         job_search_log,

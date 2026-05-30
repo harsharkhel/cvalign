@@ -48,7 +48,7 @@ def recommendations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    recs = get_recommendations(
+    recs, message = get_recommendations(
         db,
         current_user.id,
         resume_analysis_id=resume_analysis_id,
@@ -57,7 +57,8 @@ def recommendations(
         limit=limit,
     )
     return JobRecommendationsResponse(
-        recommendations=[JobRecommendationItem(**r) for r in recs]
+        recommendations=[JobRecommendationItem(**r) for r in recs],
+        message=message or "",
     )
 
 

@@ -8,6 +8,7 @@ from app.models.resume_analysis import ResumeAnalysis
 from app.models.user import User
 from app.schemas.resume_schema import ResumeAnalysisResponse, ResumeHistoryItem, ResumeHistoryResponse
 from app.services.ai_analysis_service import merge_analysis, run_ai_resume_analysis
+from app.services.dashboard_service import refresh_dashboard_snapshot
 from app.services.resume_analyzer import analyze_resume_local
 from app.services.resume_parser import save_and_parse_resume
 from app.utils.dependencies import get_current_user
@@ -32,8 +33,12 @@ def _analysis_to_response(analysis: ResumeAnalysis) -> ResumeAnalysisResponse:
         jd_skills=analysis.jd_skills_json or [],
         suggestions=suggestions_data.get("suggestions", []),
         improved_bullets=analysis.improved_bullets_json or [],
-        learning_roadmap=suggestions_data.get("learning_roadmap", []),
-        final_summary=suggestions_data.get("final_summary", ""),
+        learning_roadmap=(
+            analysis.learning_roadmap_json
+            or suggestions_data.get("learning_roadmap", [])
+            or []
+        ),
+        final_summary=analysis.final_summary or suggestions_data.get("final_summary", "") or "",
         fit_level=suggestions_data.get("fit_level"),
         ai_estimated_score=suggestions_data.get("ai_estimated_score"),
         missing_keywords=suggestions_data.get("missing_keywords", []),
@@ -90,10 +95,13 @@ async def analyze_resume(
             "resume_weaknesses": merged.get("resume_weaknesses", []),
         },
         improved_bullets_json=merged["improved_bullets"],
+        learning_roadmap_json=merged["learning_roadmap"],
+        final_summary=merged["final_summary"] or None,
     )
     db.add(analysis)
     db.commit()
     db.refresh(analysis)
+    refresh_dashboard_snapshot(db, current_user.id)
     return _analysis_to_response(analysis)
 
 
@@ -161,4 +169,5 @@ def delete_analysis(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
     db.delete(analysis)
     db.commit()
+    refresh_dashboard_snapshot(db, current_user.id)
     return {"message": "Analysis deleted"}

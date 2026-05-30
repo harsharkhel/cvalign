@@ -7,15 +7,21 @@ from app.models.ai_chat_message import AIChatMessage
 from app.models.job import Job
 from app.models.job_recommendation import JobRecommendation
 from app.models.resume_analysis import ResumeAnalysis
-from app.services.ai_analysis_service import _call_gemini, _call_openai
+from app.services.ai_analysis_service import _call_openai
+from app.services.dashboard_service import refresh_dashboard_snapshot
 
 settings = get_settings()
+
+UPLOAD_FIRST_MESSAGE = (
+    "Please upload your resume and paste a job description first "
+    "so I can give personalized answers."
+)
 
 CHAT_SYSTEM = """You are CVAlign AI career assistant. Answer using ONLY the context provided.
 Rules:
 - Do not guarantee job selection or rejection.
 - Do not fabricate job URLs, companies, or salaries not in context.
-- If information is missing, say you are uncertain.
+- If information is missing, say it is missing.
 - Be helpful about resume improvements, skills, and job fit.
 - Refer to scores as ATS-style match scores, not guarantees."""
 
@@ -43,7 +49,9 @@ def build_context(
         ctx["matched_skills"] = analysis.matched_skills_json or []
         ctx["resume_snippet"] = analysis.resume_text[:1500]
         ctx["job_description_snippet"] = analysis.job_description[:1500]
-        ctx["final_summary"] = (analysis.suggestions_json or {}).get("final_summary", "")
+        ctx["final_summary"] = analysis.final_summary or (analysis.suggestions_json or {}).get(
+            "final_summary", ""
+        )
 
     if job_id:
         job = db.query(Job).filter(Job.id == job_id).first()
@@ -81,46 +89,34 @@ def build_context(
 
 
 def _generate_response(message: str, context: dict) -> str:
-    context_str = str(context)[:6000]
-    prompt = f"{CHAT_SYSTEM}\n\nContext:\n{context_str}\n\nUser question: {message}"
+    if not context.get("has_resume_analysis"):
+        return UPLOAD_FIRST_MESSAGE
+
+    if not settings.OPENAI_API_KEY:
+        return (
+            "I have your resume analysis context, but AI chat is unavailable because "
+            "OPENAI_API_KEY is not configured on the server. Review your analysis "
+            "dashboard for scores, matched skills, and missing skills."
+        )
+
+    context_str = str({k: v for k, v in context.items() if k != "resume_snippet"})[:6000]
+    resume_snippet = context.get("resume_snippet", "")[:2000]
+    jd_snippet = context.get("job_description_snippet", "")[:2000]
+    prompt = (
+        f"{CHAT_SYSTEM}\n\n"
+        f"Resume excerpt:\n{resume_snippet}\n\n"
+        f"Job description excerpt:\n{jd_snippet}\n\n"
+        f"Context:\n{context_str}\n\n"
+        f"User question: {message}"
+    )
 
     raw = _call_openai(prompt)
     if raw:
         return raw.strip()
 
-    raw = _call_gemini(prompt)
-    if raw:
-        return raw.strip()
-
-    return _fallback_response(message, context)
-
-
-def _fallback_response(message: str, context: dict) -> str:
-    if not context.get("has_resume_analysis"):
-        return (
-            "I don't have resume analysis context yet. Please upload your resume "
-            "and run an analysis first."
-        )
-
-    msg_lower = message.lower()
-    missing = context.get("missing_skills", [])
-    ats = context.get("ats_score", 0)
-
-    if "score" in msg_lower or "low" in msg_lower:
-        return (
-            f"Your ATS-style match score is {ats}. This reflects text and skill overlap — "
-            f"not a hiring guarantee. Focus on missing skills: {', '.join(missing[:5]) or 'none identified'}."
-        )
-    if "skill" in msg_lower:
-        return f"Prioritize learning: {', '.join(missing[:5]) or 'review the job description for required skills'}."
-    if "improve" in msg_lower or "resume" in msg_lower:
-        return (
-            "Improve quantified bullet points, align keywords with the job description, "
-            "and address missing skills from your latest analysis."
-        )
     return (
-        f"Based on your analysis (score {ats}), I can help with skills, resume tips, and job fit. "
-        "Ask a specific question. Note: AI enrichment is unavailable without API keys configured."
+        "I could not generate an AI response right now. Please review your latest "
+        "analysis scores and skill gaps on the dashboard."
     )
 
 
@@ -166,5 +162,6 @@ def chat(
     db.add(record)
     db.commit()
     db.refresh(record)
+    refresh_dashboard_snapshot(db, user_id)
 
     return record, safe_context

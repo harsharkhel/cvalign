@@ -25,6 +25,8 @@ class ResumeAnalysis(Base):
     jd_skills_json: Mapped[list] = mapped_column(JSON, default=list)
     suggestions_json: Mapped[dict] = mapped_column(JSON, default=dict)
     improved_bullets_json: Mapped[list] = mapped_column(JSON, default=list)
+    learning_roadmap_json: Mapped[list] = mapped_column(JSON, default=list)
+    final_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True
     )

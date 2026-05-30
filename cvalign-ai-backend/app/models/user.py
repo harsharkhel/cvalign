@@ -55,3 +55,6 @@ class User(Base):
     job_search_logs = relationship("JobSearchLog", back_populates="user")
     job_recommendations = relationship("JobRecommendation", back_populates="user")
     chat_messages = relationship("AIChatMessage", back_populates="user")
+    dashboard_snapshot = relationship(
+        "DashboardSnapshot", back_populates="user", uselist=False
+    )

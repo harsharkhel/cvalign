@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models.login_log import LoginLog, LoginProvider, LoginStatus
 from app.models.user import AuthProvider, User
+from app.services.dashboard_service import create_dashboard_snapshot
 from app.utils.jwt_handler import build_token_payload, create_access_token
 
 logger = logging.getLogger(__name__)
@@ -166,6 +167,8 @@ def google_login(
 
     db.commit()
     db.refresh(user)
+
+    create_dashboard_snapshot(db, user.id)
 
     _log_google(db, email, LoginStatus.success, user.id, ip_address, device_info)
 

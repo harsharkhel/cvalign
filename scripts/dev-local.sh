@@ -4,7 +4,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND="$ROOT/cvalign-ai-backend"
-FRONTEND="$ROOT/../FRONTEND"
+FRONTEND="$ROOT/FRONTEND"
 
 echo "Starting CVAlign local stack..."
 echo "  Backend:  http://localhost:8000"

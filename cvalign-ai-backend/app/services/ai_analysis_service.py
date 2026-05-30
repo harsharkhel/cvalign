@@ -6,7 +6,7 @@ from app.config import get_settings
 
 settings = get_settings()
 
-RESUME_ANALYSIS_PROMPT = """Analyze this resume against the given job description. Give an honest ATS-style analysis. Do not guarantee selection. Identify matched skills, missing skills, missing keywords, weak resume sections, project improvements, better bullet points, and learning roadmap.
+RESUME_ANALYSIS_PROMPT = """Analyze this resume against the given job description. Do not use fake assumptions. Only use the provided resume text and job description. If information is missing, say it is missing. Do not guarantee selection. Return an ATS-style analysis with matched skills, missing skills, required improvements, improved bullet points, and learning roadmap.
 
 Resume Text:
 {resume_text}
@@ -14,7 +14,7 @@ Resume Text:
 Job Description:
 {job_description}
 
-Return structured JSON only:
+Return structured JSON:
 {{
   "ats_score": 0-100,
   "fit_level": "strong/moderate/weak",
@@ -23,7 +23,7 @@ Return structured JSON only:
   "missing_keywords": [],
   "resume_strengths": [],
   "resume_weaknesses": [],
-  "suggestions": [],
+  "required_improvements": [],
   "improved_bullets": [],
   "learning_roadmap": [],
   "final_summary": ""
@@ -45,25 +45,21 @@ def _extract_json(text: str) -> Optional[dict]:
     return None
 
 
-def _default_ai_result(local: dict) -> dict:
+def _local_only_result(local: dict) -> dict:
+    """Local parser scores only — no fabricated AI suggestions."""
     return {
         "ats_score": local.get("ats_score", 0),
-        "fit_level": "moderate",
+        "fit_level": None,
         "matched_skills": local.get("matched_skills", []),
         "missing_skills": local.get("missing_skills", []),
         "missing_keywords": [],
         "resume_strengths": [],
         "resume_weaknesses": [],
-        "suggestions": [
-            "Align resume keywords with the job description.",
-            "Quantify achievements in bullet points.",
-        ],
+        "suggestions": [],
+        "required_improvements": [],
         "improved_bullets": [],
-        "learning_roadmap": local.get("missing_skills", [])[:5],
-        "final_summary": (
-            "ATS-style Resume Match Score is based on text and skill similarity. "
-            "This is not a guarantee of ATS or hiring outcome."
-        ),
+        "learning_roadmap": [],
+        "final_summary": "",
         "ai_available": False,
     }
 
@@ -78,28 +74,18 @@ def _call_openai(prompt: str) -> Optional[str]:
         response = client.chat.completions.create(
             model=settings.OPENAI_MODEL,
             messages=[
-                {"role": "system", "content": "You are a resume analyst. Respond with valid JSON only."},
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a resume analyst. Use only the provided resume and job description. "
+                        "Respond with valid JSON only. Do not guarantee selection."
+                    ),
+                },
                 {"role": "user", "content": prompt},
             ],
             temperature=0.3,
         )
         return response.choices[0].message.content
-    except Exception:
-        return None
-
-
-def _call_gemini(prompt: str) -> Optional[str]:
-    if not settings.GEMINI_API_KEY:
-        return None
-    try:
-        import google.generativeai as genai
-
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        model = genai.GenerativeModel(settings.GEMINI_MODEL)
-        response = model.generate_content(
-            prompt + "\n\nRespond with valid JSON only, no markdown."
-        )
-        return response.text
     except Exception:
         return None
 
@@ -112,32 +98,31 @@ def run_ai_resume_analysis(resume_text: str, job_description: str, local: dict) 
 
     raw = _call_openai(prompt)
     if not raw:
-        raw = _call_gemini(prompt)
-
-    if not raw:
-        result = _default_ai_result(local)
-        return result
+        return _local_only_result(local)
 
     parsed = _extract_json(raw)
     if not parsed:
-        result = _default_ai_result(local)
+        result = _local_only_result(local)
         result["ai_available"] = False
         return result
 
-    result = _default_ai_result(local)
-    result["ai_available"] = True
-    result["ai_estimated_score"] = parsed.get("ats_score")
-    result["fit_level"] = parsed.get("fit_level", "moderate")
-    result["matched_skills"] = parsed.get("matched_skills") or local.get("matched_skills", [])
-    result["missing_skills"] = parsed.get("missing_skills") or local.get("missing_skills", [])
-    result["missing_keywords"] = parsed.get("missing_keywords", [])
-    result["resume_strengths"] = parsed.get("resume_strengths", [])
-    result["resume_weaknesses"] = parsed.get("resume_weaknesses", [])
-    result["suggestions"] = parsed.get("suggestions", result["suggestions"])
-    result["improved_bullets"] = parsed.get("improved_bullets", [])
-    result["learning_roadmap"] = parsed.get("learning_roadmap", [])
-    result["final_summary"] = parsed.get("final_summary") or result["final_summary"]
-    return result
+    suggestions = parsed.get("required_improvements") or parsed.get("suggestions") or []
+    return {
+        "ats_score": local.get("ats_score", 0),
+        "fit_level": parsed.get("fit_level"),
+        "matched_skills": parsed.get("matched_skills") or local.get("matched_skills", []),
+        "missing_skills": parsed.get("missing_skills") or local.get("missing_skills", []),
+        "missing_keywords": parsed.get("missing_keywords", []),
+        "resume_strengths": parsed.get("resume_strengths", []),
+        "resume_weaknesses": parsed.get("resume_weaknesses", []),
+        "suggestions": suggestions,
+        "required_improvements": suggestions,
+        "improved_bullets": parsed.get("improved_bullets", []),
+        "learning_roadmap": parsed.get("learning_roadmap", []),
+        "final_summary": parsed.get("final_summary") or "",
+        "ai_available": True,
+        "ai_estimated_score": parsed.get("ats_score"),
+    }
 
 
 def merge_analysis(local: dict, ai: dict) -> dict[str, Any]:

@@ -6,6 +6,7 @@ from app.config import get_settings
 from app.models.job import Job
 from app.models.job_recommendation import JobRecommendation
 from app.models.resume_analysis import ResumeAnalysis
+from app.services.dashboard_service import refresh_dashboard_snapshot
 from app.services.job_search_service import _upsert_job, search_jobs
 from app.services.resume_analyzer import (
     calculate_text_similarity,
@@ -13,6 +14,8 @@ from app.services.resume_analyzer import (
 )
 
 settings = get_settings()
+
+NO_ANALYSIS_MESSAGE = "Upload your resume and complete analysis first."
 
 
 def _score_job(
@@ -50,7 +53,7 @@ def get_recommendations(
     role_preference: str = "",
     location: str = "",
     limit: int = 10,
-) -> List[dict]:
+) -> tuple[List[dict], str | None]:
     analysis_q = db.query(ResumeAnalysis).filter(ResumeAnalysis.user_id == user_id)
     if resume_analysis_id:
         analysis = analysis_q.filter(ResumeAnalysis.id == resume_analysis_id).first()
@@ -58,7 +61,7 @@ def get_recommendations(
         analysis = analysis_q.order_by(ResumeAnalysis.created_at.desc()).first()
 
     if not analysis:
-        return []
+        return [], NO_ANALYSIS_MESSAGE
 
     resume_skills = analysis.resume_skills_json or []
     jd_skills = analysis.jd_skills_json or []
@@ -106,7 +109,8 @@ def get_recommendations(
             break
 
     db.commit()
-    return recommendations
+    refresh_dashboard_snapshot(db, user_id)
+    return recommendations, None
 
 
 def match_single_job(

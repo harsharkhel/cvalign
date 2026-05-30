@@ -10,7 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import get_settings
 from app.database import SessionLocal, init_db
-from app.routes import admin_routes, auth_routes, chat_routes, job_routes, recruiter_routes, resume_routes
+from app.routes import admin_routes, auth_routes, chat_routes, dashboard_routes, job_routes, recruiter_routes, resume_routes
 from app.services.auth_service import seed_admin_if_configured
 from app.utils.error_handlers import (
     generic_exception_handler,
@@ -61,6 +61,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_routes.router)
+app.include_router(dashboard_routes.router)
 app.include_router(resume_routes.router)
 app.include_router(job_routes.router)
 app.include_router(chat_routes.router)
@@ -74,6 +75,5 @@ def health():
         "status": "ok",
         "environment": settings.ENV,
         "cors_origins_count": len(settings.allowed_origins_list),
-        "google_login": bool(settings.GOOGLE_CLIENT_ID),
-        "gemini": bool(settings.GEMINI_API_KEY),
+        "openai": bool(settings.OPENAI_API_KEY),
     }

@@ -44,6 +44,7 @@ class JobRecommendationItem(BaseModel):
 
 class JobRecommendationsResponse(BaseModel):
     recommendations: List[JobRecommendationItem]
+    message: str = ""
 
 
 class JobMatchResponse(BaseModel):

@@ -13,7 +13,7 @@ def test_google_login_mock(db):
         "iss": "accounts.google.com",
     }
 
-    with patch("app.services.google_auth_service.verify_google_token", return_value=mock_idinfo):
+    with patch("app.services.google_auth_service.verify_firebase_id_token", return_value=mock_idinfo):
         with patch("app.services.google_auth_service.settings") as mock_settings:
             mock_settings.GOOGLE_CLIENT_ID = "test-client-id"
             user, token = google_login(db, "fake-token", "127.0.0.1", "pytest")
@@ -32,7 +32,7 @@ def test_google_login_endpoint(client):
         "iss": "accounts.google.com",
     }
 
-    with patch("app.services.google_auth_service.verify_google_token", return_value=mock_idinfo):
+    with patch("app.services.google_auth_service.verify_firebase_id_token", return_value=mock_idinfo):
         resp = client.post("/auth/google", json={"id_token": "valid.mock.token"})
         assert resp.status_code == 200
         assert "access_token" in resp.json()

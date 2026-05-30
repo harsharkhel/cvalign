@@ -136,7 +136,7 @@ def test_google_login_no_password_hash(client):
         "email_verified": True,
         "iss": "accounts.google.com",
     }
-    with patch("app.services.google_auth_service.verify_google_token", return_value=mock_idinfo):
+    with patch("app.services.google_auth_service.verify_firebase_id_token", return_value=mock_idinfo):
         resp = client.post("/auth/google", json={"id_token": "mock.token"})
     assert resp.status_code == 200
     assert "access_token" in resp.json()

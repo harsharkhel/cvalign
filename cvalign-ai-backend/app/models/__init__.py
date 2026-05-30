@@ -1,4 +1,5 @@
 from app.models.ai_chat_message import AIChatMessage
+from app.models.dashboard_snapshot import DashboardSnapshot
 from app.models.job import Job
 from app.models.job_recommendation import JobRecommendation
 from app.models.job_search_log import JobSearchLog
@@ -14,4 +15,5 @@ __all__ = [
     "JobSearchLog",
     "JobRecommendation",
     "AIChatMessage",
+    "DashboardSnapshot",
 ]
