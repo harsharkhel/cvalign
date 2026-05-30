@@ -33,12 +33,16 @@ See `INTEGRATION.md` in the **cvalign** backend repo for full setup and troubles
 
 ## Deploy on Vercel
 
-1. Import the **cvalign** repo (or **FRONTEND** repo).
-2. Set **Root Directory** to `FRONTEND` (monorepo) or `.` (standalone frontend repo).
-3. Framework preset: **Vite**. Output directory: **`dist`** (default).
-4. Add environment variables from `.env.example` (especially `VITE_*` — they are baked in at build time).
-5. For production, set `VITE_API_BASE_URL` to your live FastAPI URL (not `/api`). The `/api` proxy only exists in `npm run dev`.
-6. `vercel.json` rewrites all routes to `index.html` so refreshes and paths like `/auth/callback` do not return 404.
+See **[DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md)** for full settings.
 
-- `npm run build` — production build
-- `npm run lint` — TypeScript check
+Quick summary:
+
+1. **cvalign repo:** Root Directory = `FRONTEND` **or** use repo-root `vercel.json`.
+2. **FRONTEND repo:** Root Directory = `.`
+3. Framework: **Vite** · Output: **`dist`** · Build: **`npm run build`**
+4. `vercel.json` rewrites all routes to `/` for SPA client routing.
+5. Set `VITE_API_BASE_URL` to your live FastAPI URL in Vercel env vars.
+
+## Scripts
+
+- `npm run dev` — Vite on port 3000 with `/api` proxy
