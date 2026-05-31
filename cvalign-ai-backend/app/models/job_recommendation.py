@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -19,6 +19,7 @@ class JobRecommendation(Base):
     matched_skills_json: Mapped[list] = mapped_column(JSON, default=list)
     missing_skills_json: Mapped[list] = mapped_column(JSON, default=list)
     recommendation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_saved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

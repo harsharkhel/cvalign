@@ -1,48 +1,46 @@
-# CVAlign Frontend
+# CVAlign AI Frontend
 
-React + Vite UI for CVAlign resume analysis. Connects to the FastAPI backend via a dev proxy.
+React + Vite SPA with **Supabase** for authentication, database, storage, and resume analysis (Edge Functions).
 
-## Quick start (with backend)
+## Quick start
 
-1. **Backend** (from `cvalign` repo):
+```bash
+cd FRONTEND
+cp .env.example .env   # add VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
+npm install
+npm run dev
+```
 
-   ```bash
-   cd "ai agent/cvalign-ai-backend"
-   source .venv/bin/activate
-   python run.py
-   ```
+Open http://localhost:3000
 
-2. **Frontend** (this repo):
+## Supabase setup
 
-   ```bash
-   npm install
-   cp .env.example .env
-   npm run dev
-   ```
+See [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) for:
+- SQL migration (`profiles`, `resume_analyses`, etc.)
+- Google OAuth configuration
+- Deploying the `analyze-resume` Edge Function
 
-3. Open http://localhost:3000 — login footer should show **API Backend: ONLINE**.
+## Deploy (Vercel)
 
-See `INTEGRATION.md` in the **cvalign** backend repo for full setup and troubleshooting.
+- **Root directory:** `FRONTEND`
+- **Build command:** `npm run build`
+- **Output directory:** `dist`
+- **Environment variables:** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
 
-## Environment
+`vercel.json` rewrites all routes to `index.html` for SPA routing (fixes 404 on refresh).
 
-| Variable | Purpose |
-|----------|---------|
-| `VITE_API_BASE_URL` | API base (`/api` uses Vite proxy → `localhost:8000`) |
-| `GEMINI_API_KEY` | Optional; AI Studio / Gemini features |
+## Auth
 
-## Deploy on Vercel
+- Email/password via Supabase Auth (`signUp`, `signInWithPassword`, `signOut`)
+- Google OAuth via Supabase (`signInWithOAuth`)
+- User profiles stored in `profiles` table with empty `dashboard_data` until resume analysis
 
-See **[DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md)** for full settings.
+## Resume analysis
 
-Quick summary:
+Frontend extracts PDF/DOCX text locally, then POSTs to:
 
-1. **cvalign repo:** Root Directory = `FRONTEND` **or** use repo-root `vercel.json`.
-2. **FRONTEND repo:** Root Directory = `.`
-3. Framework: **Vite** · Output: **`dist`** · Build: **`npm run build`**
-4. `vercel.json` rewrites all routes to `/` for SPA client routing.
-5. Set `VITE_API_BASE_URL` to your live FastAPI URL in Vercel env vars.
+```
+{VITE_SUPABASE_URL}/functions/v1/analyze-resume
+```
 
-## Scripts
-
-- `npm run dev` — Vite on port 3000 with `/api` proxy
+Passwords are never stored in the app — only Supabase Auth handles credentials.

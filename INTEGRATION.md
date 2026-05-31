@@ -67,6 +67,89 @@ Add to **Authentication → Settings → Authorized domains**:
 - `localhost`
 - `127.0.0.1`
 
+## New features (auth, email, sheets, chat, jobs)
+
+### Email login notifications
+Set SMTP credentials in `cvalign-ai-backend/.env`:
+```
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=you@gmail.com
+EMAIL_PASS=your_app_password
+```
+On every successful signup or login, the backend sends:
+**Subject:** Successfully logged in to CVAlign AI
+
+### Google Sheets audit log
+1. Create a Google Cloud service account with Sheets API enabled.
+2. Share your spreadsheet with the service account email (Editor).
+3. Set in `.env`:
+```
+GOOGLE_SERVICE_ACCOUNT_EMAIL=...@....iam.gserviceaccount.com
+GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+GOOGLE_SHEET_ID=your_sheet_id
+```
+Header row (optional): `timestamp | name | email | authProvider | action | status`
+
+### Google OAuth (backend redirect)
+```
+GOOGLE_CLIENT_ID=....apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_CALLBACK_URL=http://localhost:8000/auth/google/callback
+```
+Add authorized redirect URI in Google Cloud Console. Frontend button **Google OAuth (Backend)** starts `GET /auth/google`.
+
+### Job APIs
+```
+ADZUNA_APP_ID=...
+ADZUNA_APP_KEY=...
+JOOBLE_API_KEY=...
+SERPAPI_KEY=...   # optional
+```
+
+## API routes (complete list)
+
+| Method | Route | Auth |
+|--------|-------|------|
+| POST | `/auth/register` | Public |
+| POST | `/auth/login` | Public |
+| POST | `/auth/google` | Public (Firebase ID token) |
+| GET | `/auth/google` | Public (OAuth redirect) |
+| GET | `/auth/google/callback` | Public |
+| POST | `/auth/google/token` | Public (GSI credential) |
+| GET | `/auth/me` | JWT |
+| POST | `/auth/logout` | JWT |
+| POST | `/resume/upload` | JWT |
+| POST | `/resume/analyze` | JWT |
+| GET | `/resume/history` | JWT |
+| POST | `/chat/message` | JWT |
+| GET | `/chat/history` | JWT |
+| POST | `/jobs/recommend` | JWT |
+| GET | `/jobs/recommendations` | JWT |
+| GET | `/jobs/search` | JWT |
+| POST | `/jobs/save` | JWT |
+| GET | `/jobs/saved` | JWT |
+| GET | `/admin/users` | Admin |
+| GET | `/admin/login-logs` | Admin |
+
+## Testing checklist
+
+- [ ] Register with email/password — password stored as bcrypt hash only
+- [ ] Duplicate email returns 409
+- [ ] Login sends email (check inbox or mock in tests)
+- [ ] Login/signup appends row to Google Sheet
+- [ ] Google OAuth creates new user / logs in existing user
+- [ ] Resume upload + analyze still work
+- [ ] Chatbot responds with resume context
+- [ ] Job recommendations return live jobs with apply links
+- [ ] Protected routes return 401 without JWT
+
+Run backend tests:
+```bash
+cd cvalign-ai-backend
+python -m pytest tests/ -q
+```
+
 ## Troubleshooting
 
 | Issue | Fix |

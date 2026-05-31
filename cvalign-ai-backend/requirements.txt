@@ -19,5 +19,6 @@ openpyxl>=3.1.5
 slowapi>=0.1.9
 python-multipart>=0.0.12
 httpx>=0.28.0
+google-api-python-client>=2.150.0
 pytest>=8.3.0
 pytest-asyncio>=0.24.0

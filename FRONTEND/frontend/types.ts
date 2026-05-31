@@ -6,6 +6,9 @@ export type PageId =
   | 'results'
   | 'history'
   | 'market-data'
+  | 'chat'
+  | 'jobs'
+  | 'saved-jobs'
   | 'profile';
 
 export interface CandidateDetails {

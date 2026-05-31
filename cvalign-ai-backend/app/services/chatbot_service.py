@@ -9,6 +9,7 @@ from app.models.job_recommendation import JobRecommendation
 from app.models.resume_analysis import ResumeAnalysis
 from app.services.ai_analysis_service import _call_openai
 from app.services.dashboard_service import refresh_dashboard_snapshot
+from app.services.job_search_service import search_jobs
 
 settings = get_settings()
 
@@ -88,7 +89,36 @@ def build_context(
     return ctx
 
 
-def _generate_response(message: str, context: dict) -> str:
+def _is_job_search_query(message: str) -> bool:
+    keywords = (
+        "job", "jobs", "recommend", "opening", "hiring", "apply", "vacancy",
+        "role", "position", "career opportunity",
+    )
+    lower = message.lower()
+    return any(k in lower for k in keywords)
+
+
+def _fetch_live_jobs_for_chat(db: Session, user_id: int, context: dict) -> list[dict]:
+    if not settings.JOB_LIVE_SEARCH_ENABLED:
+        return []
+    query = " ".join((context.get("matched_skills") or [])[:3]) or "software engineer"
+    try:
+        jobs, _ = search_jobs(db, user_id, query, "", limit=5)
+        return [
+            {
+                "title": j.title,
+                "company": j.company,
+                "location": j.location,
+                "apply_url": j.apply_url,
+                "source": j.source,
+            }
+            for j in jobs
+        ]
+    except Exception:
+        return []
+
+
+def _generate_response(message: str, context: dict, live_jobs: list[dict] | None = None) -> str:
     if not context.get("has_resume_analysis"):
         return UPLOAD_FIRST_MESSAGE
 
@@ -102,11 +132,14 @@ def _generate_response(message: str, context: dict) -> str:
     context_str = str({k: v for k, v in context.items() if k != "resume_snippet"})[:6000]
     resume_snippet = context.get("resume_snippet", "")[:2000]
     jd_snippet = context.get("job_description_snippet", "")[:2000]
+    jobs_str = ""
+    if live_jobs:
+        jobs_str = f"\n\nLive job search results:\n{live_jobs[:5]}\n"
     prompt = (
         f"{CHAT_SYSTEM}\n\n"
         f"Resume excerpt:\n{resume_snippet}\n\n"
         f"Job description excerpt:\n{jd_snippet}\n\n"
-        f"Context:\n{context_str}\n\n"
+        f"Context:\n{context_str}{jobs_str}\n\n"
         f"User question: {message}"
     )
 
@@ -149,7 +182,13 @@ def chat(
     safe_context = {k: v for k, v in context.items() if k not in ("resume_snippet",)}
     safe_context["resume_available"] = context.get("has_resume_analysis", False)
 
-    ai_response = _generate_response(message, context)
+    live_jobs: list[dict] = []
+    if _is_job_search_query(message):
+        live_jobs = _fetch_live_jobs_for_chat(db, user_id, context)
+        if live_jobs:
+            safe_context["live_jobs"] = live_jobs
+
+    ai_response = _generate_response(message, context, live_jobs)
 
     record = AIChatMessage(
         user_id=user_id,

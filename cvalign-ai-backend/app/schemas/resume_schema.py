@@ -44,3 +44,13 @@ class ResumeHistoryItem(BaseModel):
 class ResumeHistoryResponse(BaseModel):
     analyses: List[ResumeHistoryItem]
     total: int
+
+
+class ResumeUploadResponse(BaseModel):
+    id: int
+    file_url: str
+    parsed_skills: List[str]
+    extracted_text_length: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

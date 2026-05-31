@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.login_log import LoginLog, LoginProvider, LoginStatus
 from app.models.user import AuthProvider, User, UserRole
 from app.schemas.auth_schema import LoginRequest, RegisterRequest
+from app.services.auth_events import handle_auth_success
 from app.services.dashboard_service import create_dashboard_snapshot
 from app.utils.jwt_handler import build_token_payload, create_access_token
 from app.utils.security import hash_password, verify_password
@@ -68,6 +69,12 @@ def register_user(
     _log_login(
         db, user.email, LoginProvider.local, LoginStatus.success, user.id, ip_address, device_info
     )
+    handle_auth_success(
+        name=user.name,
+        email=user.email,
+        auth_provider="local",
+        action="signup",
+    )
 
     token = create_access_token(
         build_token_payload(user.id, user.user_uuid, user.email, user.role.value)
@@ -109,6 +116,12 @@ def login_user(
 
     _log_login(
         db, user.email, LoginProvider.local, LoginStatus.success, user.id, ip_address, device_info
+    )
+    handle_auth_success(
+        name=user.name,
+        email=user.email,
+        auth_provider="local",
+        action="login",
     )
 
     token = create_access_token(

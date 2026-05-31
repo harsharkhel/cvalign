@@ -23,16 +23,16 @@ def create_access_token(data: dict[str, Any], expires_delta: Optional[timedelta]
     expire = datetime.now(timezone.utc) + (
         expires_delta
         if expires_delta
-        else timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        else timedelta(minutes=settings.jwt_expires_in_minutes)
     )
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(to_encode, settings.jwt_secret, algorithm=settings.JWT_ALGORITHM)
 
 
 def decode_access_token(token: str) -> Optional[dict[str, Any]]:
     try:
         return jwt.decode(
-            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+            token, settings.jwt_secret, algorithms=[settings.JWT_ALGORITHM]
         )
     except JWTError:
         return None

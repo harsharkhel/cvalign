@@ -1,0 +1,10 @@
+[project]
+id = "cvalign-ai"
+name = "CVAlign AI"
+
+[api]
+enabled = true
+port = 54321
+
+[functions.analyze-resume]
+verify_jwt = false

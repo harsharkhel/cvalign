@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { PageId, AnalysisResult, MarketDataSource } from './types';
+import { PageId } from './types';
 import { saveStoredRecords, getStoredMarketSources, saveStoredMarketSources } from './data';
-import { clearAuth, fetchMe, getToken, loadHistoryAsRecords, setAuth } from './lib/api';
-import { logoutFirebase } from './lib/firebaseAuth';
+import {
+  clearAuth,
+  fetchMe,
+  loadHistoryAsRecords,
+  logoutUser,
+  onAuthStateChange,
+} from './lib/api';
 
-// Navigation Components
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 
-// Page Components
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
@@ -17,6 +20,9 @@ import ResultsDashboard from './pages/ResultsDashboard';
 import HistoryAnalytics from './pages/HistoryAnalytics';
 import StoredMarketData from './pages/StoredMarketData';
 import Profile from './pages/Profile';
+import ChatAssistant from './pages/ChatAssistant';
+import JobRecommendations from './pages/JobRecommendations';
+import SavedJobs from './pages/SavedJobs';
 
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -24,45 +30,37 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<PageId>('login');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [records, setRecords] = useState<import('./types').AnalysisResult[]>([]);
+  const [sources, setSources] = useState<import('./types').MarketDataSource[]>([]);
+  const [activeAnalysisResult, setActiveAnalysisResult] = useState<import('./types').AnalysisResult | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
-  // Local Storage States
-  const [records, setRecords] = useState<AnalysisResult[]>([]);
-  const [sources, setSources] = useState<MarketDataSource[]>([]);
-  const [activeAnalysisResult, setActiveAnalysisResult] = useState<AnalysisResult | null>(null);
-
-  // Load state on mount
   useEffect(() => {
-    if (window.location.pathname.endsWith('/auth/callback')) {
-      return;
-    }
-
-    const token = getToken();
-
-    if (token) {
-      fetchMe()
-        .then(() => {
+    const { data: { subscription } } = onAuthStateChange(async (session) => {
+      if (session?.user) {
+        try {
+          await fetchMe();
           setCurrentPage('dashboard');
-          return loadHistoryAsRecords();
-        })
-        .then((apiRecords) => {
+          const apiRecords = await loadHistoryAsRecords();
           setRecords(apiRecords);
           saveStoredRecords(apiRecords);
-        })
-        .catch(() => {
+        } catch {
           clearAuth();
-          setCurrentPage('login');
           setRecords([]);
-        });
-    } else {
-      setCurrentPage('login');
-      setRecords([]);
-    }
+          setCurrentPage('login');
+        }
+      } else {
+        clearAuth();
+        setRecords([]);
+      }
+      setAuthReady(true);
+    });
 
     setSources(getStoredMarketSources());
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Update localStorage when records change
-  const handleAddRecord = (record: AnalysisResult) => {
+  const handleAddRecord = (record: import('./types').AnalysisResult) => {
     const updated = [record, ...records];
     setRecords(updated);
     saveStoredRecords(updated);
@@ -76,7 +74,7 @@ export default function App() {
     setActiveAnalysisResult(null);
   };
 
-  const handleAddSource = (src: MarketDataSource) => {
+  const handleAddSource = (src: import('./types').MarketDataSource) => {
     const updated = [src, ...sources];
     setSources(updated);
     saveStoredMarketSources(updated);
@@ -88,13 +86,9 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    clearAuth();
-    try {
-      await logoutFirebase();
-    } catch {
-      // ignore Firebase sign-out errors
-    }
+    await logoutUser();
     setActiveAnalysisResult(null);
+    setRecords([]);
     setCurrentPage('login');
   };
 
@@ -105,35 +99,11 @@ export default function App() {
         setRecords(apiRecords);
         saveStoredRecords(apiRecords);
       })
-      .catch(() => {
-        setRecords([]);
-      });
+      .catch(() => setRecords([]));
     setSources(getStoredMarketSources());
   };
 
-  // Google OAuth redirect: /auth/callback?token=...
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const oauthToken = params.get('token');
-    const onCallbackPath = window.location.pathname.endsWith('/auth/callback');
-
-    if (!onCallbackPath || !oauthToken) return;
-
-    setAuth(oauthToken, { name: 'User', email: '' });
-    fetchMe()
-      .then(() => {
-        window.history.replaceState({}, '', '/');
-        handleLoginSuccess();
-      })
-      .catch(() => {
-        clearAuth();
-        window.history.replaceState({}, '', '/');
-        setCurrentPage('login');
-      });
-  }, []);
-
-  // Filter records in global query searches (for header)
-  const filteredRecords = records.filter(rec => {
+  const filteredRecords = records.filter((rec) => {
     if (!searchQuery) return true;
     const term = searchQuery.toLowerCase();
     return (
@@ -145,17 +115,21 @@ export default function App() {
 
   const isAuthPage = currentPage === 'login' || currentPage === 'signup';
 
+  if (!authReady && !isAuthPage) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center text-white/40 text-sm">
+        Loading CVAlign…
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#050505] text-[#F5F5F5] relative overflow-x-hidden antialiased font-sans selection:bg-white selection:text-black">
-      
-      {/* Global subtle grain overlay texture to capture dark luxury cinematic look */}
       <div className="fixed inset-0 pointer-events-none z-50 bg-image-grain opacity-[0.03]" />
 
-      {/* Cinematic Background Architecture Mockup */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute right-0 bottom-0 w-[60%] h-full bg-gradient-to-t from-black via-transparent to-transparent opacity-65"></div>
         <div className="absolute right-[-10%] top-[-20%] w-[800px] h-[1200px] bg-gradient-to-br from-[#1A1A1A] to-transparent transform -rotate-12 blur-3xl opacity-25"></div>
-        {/* Mock Skyscraper Geometry */}
         <div className="absolute right-[10%] bottom-0 w-[1px] h-full bg-white/[0.03]"></div>
         <div className="absolute right-[30%] bottom-0 w-[1px] h-[80%] bg-white/[0.02]"></div>
         <div className="absolute right-[50%] bottom-0 w-[1px] h-[60%] bg-white/[0.01]"></div>
@@ -163,8 +137,6 @@ export default function App() {
       </div>
 
       <div className="flex relative z-10">
-        
-        {/* Sidebar Nav (collapsible layout) */}
         {!isAuthPage && (
           <Sidebar
             currentPage={currentPage}
@@ -174,13 +146,11 @@ export default function App() {
           />
         )}
 
-        {/* Main stage canvas */}
         <div
           className={`flex-1 min-h-screen flex flex-col transition-all duration-300 ${
             !isAuthPage ? 'md:pl-64' : 'pl-0'
           }`}
         >
-          {/* Header */}
           {!isAuthPage && (
             <Header
               onMenuToggle={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -190,7 +160,6 @@ export default function App() {
             />
           )}
 
-          {/* Core Content frame */}
           <main className={!isAuthPage ? 'p-6 flex-1' : 'flex-1'}>
             <AnimatePresence mode="wait">
               <motion.div
@@ -202,28 +171,16 @@ export default function App() {
                 className="h-full"
               >
                 {currentPage === 'login' && (
-                  <Login
-                    onNavigate={(page) => setCurrentPage(page)}
-                    onLoginSuccess={handleLoginSuccess}
-                  />
+                  <Login onNavigate={(page) => setCurrentPage(page)} onLoginSuccess={handleLoginSuccess} />
                 )}
                 {currentPage === 'signup' && (
-                  <Signup
-                    onNavigate={(page) => setCurrentPage(page)}
-                    onSignupSuccess={handleLoginSuccess}
-                  />
+                  <Signup onNavigate={(page) => setCurrentPage(page)} onSignupSuccess={handleLoginSuccess} />
                 )}
                 {currentPage === 'dashboard' && (
-                  <Dashboard
-                    onNavigate={(page) => setCurrentPage(page)}
-                    records={filteredRecords}
-                  />
+                  <Dashboard onNavigate={(page) => setCurrentPage(page)} records={filteredRecords} />
                 )}
                 {currentPage === 'analyze' && (
-                  <AnalyzeResume
-                    onNavigate={(page) => setCurrentPage(page)}
-                    onAnalysisComplete={handleAddRecord}
-                  />
+                  <AnalyzeResume onNavigate={(page) => setCurrentPage(page)} onAnalysisComplete={handleAddRecord} />
                 )}
                 {currentPage === 'results' && (
                   <ResultsDashboard
@@ -247,18 +204,16 @@ export default function App() {
                     onAddSource={handleAddSource}
                   />
                 )}
+                {currentPage === 'chat' && <ChatAssistant onNavigate={(page) => setCurrentPage(page)} />}
+                {currentPage === 'jobs' && <JobRecommendations onNavigate={(page) => setCurrentPage(page)} />}
+                {currentPage === 'saved-jobs' && <SavedJobs onNavigate={(page) => setCurrentPage(page)} />}
                 {currentPage === 'profile' && (
-                  <Profile
-                    onNavigate={(page) => setCurrentPage(page)}
-                    records={records}
-                    onLogout={handleLogout}
-                  />
+                  <Profile onNavigate={(page) => setCurrentPage(page)} records={records} onLogout={handleLogout} />
                 )}
               </motion.div>
             </AnimatePresence>
           </main>
         </div>
-
       </div>
     </div>
   );

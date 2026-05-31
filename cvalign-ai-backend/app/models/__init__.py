@@ -4,12 +4,14 @@ from app.models.job import Job
 from app.models.job_recommendation import JobRecommendation
 from app.models.job_search_log import JobSearchLog
 from app.models.login_log import LoginLog
+from app.models.resume import Resume
 from app.models.resume_analysis import ResumeAnalysis
 from app.models.user import User
 
 __all__ = [
     "User",
     "LoginLog",
+    "Resume",
     "ResumeAnalysis",
     "Job",
     "JobSearchLog",

@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { PageId } from '../types';
-import { Eye, EyeOff, Sparkles, Mail, Lock, User, ShieldAlert } from 'lucide-react';
-import { motion } from 'motion/react';
-import { completeGoogleRedirectIfNeeded, isFirebaseConfigured, loginWithGoogle } from '../lib/firebaseAuth';
-import { googleLogin, loginUser, registerUser, getToken, checkBackendHealth, fetchMe, clearAuth } from '../lib/api';
+import { Eye, EyeOff, Mail, Lock, User, ShieldAlert } from 'lucide-react';
+import {
+  checkBackendHealth,
+  isSupabaseConfigured,
+  loginUser,
+  loginWithGoogleOAuth,
+  registerUser,
+} from '../lib/api';
 import { validatePassword } from '../lib/authValidation';
 
 interface LoginProps {
   onNavigate: (page: PageId) => void;
   onLoginSuccess: () => void;
 }
+
+const inputClass =
+  'w-full rounded-lg pl-10 pr-4 py-3 text-sm text-[#F5F5F5] placeholder:text-white/45 bg-white/[0.06] border border-white/[0.10] focus:outline-none focus:border-white/25 focus:ring-1 focus:ring-white/15 transition-all';
 
 export default function Login({ onNavigate, onLoginSuccess }: LoginProps) {
   const [isSignup, setIsSignup] = useState(false);
@@ -26,59 +33,27 @@ export default function Login({ onNavigate, onLoginSuccess }: LoginProps) {
     checkBackendHealth().then(setApiOnline);
   }, []);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const oauthError = params.get('error');
-    if (oauthError) {
-      setError(`Google sign-in failed (${oauthError}). Try email/password or check backend OAuth config.`);
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
+  const switchToLogin = () => {
+    setIsSignup(false);
+    setError('');
+  };
 
-  useEffect(() => {
-    const token = getToken();
-    if (token) {
-      fetchMe()
-        .then(() => onLoginSuccess())
-        .catch(() => clearAuth());
-      return;
-    }
-
-    if (!isFirebaseConfigured()) return;
-
-    completeGoogleRedirectIfNeeded()
-      .then(async (googleResult) => {
-        if (!googleResult) return;
-        await googleLogin(googleResult.idToken);
-        onLoginSuccess();
-      })
-      .catch((err: Error) => {
-        if (err.message !== 'REDIRECTING') {
-          setError(err.message);
-        }
-      });
-  }, [onLoginSuccess]);
+  const switchToSignup = () => {
+    setIsSignup(true);
+    setError('');
+  };
 
   const handleGoogleLogin = async () => {
-    if (!isFirebaseConfigured()) {
-      setError('Firebase is not configured. Add VITE_FIREBASE_* variables to .env and restart the dev server.');
+    if (!isSupabaseConfigured()) {
+      setError('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.');
       return;
     }
-
     setIsAttemptingLogin(true);
     setError('');
     try {
-      const googleResult = await loginWithGoogle();
-      await googleLogin(googleResult.idToken);
-      onLoginSuccess();
+      await loginWithGoogleOAuth();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Google sign-in failed.';
-      if (message === 'REDIRECTING') {
-        setError('Redirecting to Google sign-in…');
-        return;
-      }
-      setError(message);
-    } finally {
+      setError(err instanceof Error ? err.message : 'Google sign-in failed.');
       setIsAttemptingLogin(false);
     }
   };
@@ -89,13 +64,18 @@ export default function Login({ onNavigate, onLoginSuccess }: LoginProps) {
     setIsAttemptingLogin(true);
 
     try {
+      if (!isSupabaseConfigured()) {
+        setError('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.');
+        return;
+      }
+
       if (isSignup) {
         if (!name || !email || !password || !confirmPassword) {
-          setError('All administrative credentials are strictly required.');
+          setError('All fields are required.');
           return;
         }
         if (password !== confirmPassword) {
-          setError('Confirmation match failed. Review your encryption password string.');
+          setError('Passwords do not match.');
           return;
         }
         const passwordError = validatePassword(password);
@@ -103,340 +83,317 @@ export default function Login({ onNavigate, onLoginSuccess }: LoginProps) {
           setError(passwordError);
           return;
         }
-
         await registerUser(name, email, password);
         onLoginSuccess();
       } else {
         if (!email || !password) {
-          setError('Please provide both administrative credentials.');
+          setError('Email and password are required.');
           return;
         }
-        if (!email.includes('@')) {
-          setError('A valid operational email is required.');
-          return;
-        }
-
         await loginUser(email, password);
         onLoginSuccess();
       }
-    } catch (err: any) {
-      setError(err.message || 'Authentication failed. Check credentials and that the API is running.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Authentication failed.');
     } finally {
       setIsAttemptingLogin(false);
     }
   };
 
   return (
-    <div id="login-viewport" className="relative min-h-screen w-full bg-[#050505] text-[#F5F5F5] font-sans selection:bg-white selection:text-black overflow-hidden flex flex-col justify-between">
-      
-      {/* Cinematic Background Architecture Mockup */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-        <div className="absolute right-0 bottom-0 w-[60%] h-full bg-gradient-to-t from-black via-transparent to-transparent opacity-60"></div>
-        <div className="absolute right-[-10%] top-[-20%] w-[800px] h-[1200px] bg-gradient-to-br from-[#1A1A1A] to-transparent transform -rotate-12 blur-3xl opacity-30"></div>
-        {/* Mock Skyscraper Geometry */}
-        <div className="absolute right-[10%] bottom-0 w-[1px] h-full bg-white/10"></div>
-        <div className="absolute right-[30%] bottom-0 w-[1px] h-[80%] bg-white/5"></div>
-        <div className="absolute right-[50%] bottom-0 w-[1px] h-[60%] bg-white/5"></div>
-        <div className="absolute bottom-[20%] right-0 w-full h-[1px] bg-white/10"></div>
+    <div
+      id="login-viewport"
+      className="relative min-h-screen w-full bg-[#050505] text-[#F5F5F5] font-sans overflow-hidden flex flex-col"
+    >
+      {/* Cinematic background */}
+      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="absolute right-0 bottom-0 w-[60%] h-full bg-gradient-to-t from-black via-transparent to-transparent opacity-60" />
+        <div className="absolute right-[-10%] top-[-20%] w-[800px] h-[1200px] bg-gradient-to-br from-[#1A1A1A] to-transparent transform -rotate-12 blur-3xl opacity-30" />
+        <div className="absolute right-[10%] bottom-0 w-[1px] h-full bg-white/10" />
+        <div className="absolute right-[30%] bottom-0 w-[1px] h-[80%] bg-white/5" />
+        <div className="absolute right-[50%] bottom-0 w-[1px] h-[60%] bg-white/5" />
+        <div className="absolute bottom-[20%] right-0 w-full h-[1px] bg-white/10" />
       </div>
 
-      {/* Large Background Text (Cinematic) */}
-      <div className="absolute inset-0 flex items-center justify-center z-0">
-        <h1 className="text-[22vw] font-black text-white/[0.012] tracking-tighter select-none whitespace-nowrap">ALIGN CV</h1>
+      {/* Faded ALIGN CV typography */}
+      <div className="absolute inset-0 flex items-center justify-center z-0 pointer-events-none">
+        <h1 className="text-[22vw] font-black text-white/[0.012] tracking-tighter select-none whitespace-nowrap blur-[0.5px]">
+          ALIGN CV
+        </h1>
       </div>
 
-      {/* Global Grain Overlay */}
-      <div className="fixed inset-0 pointer-events-none z-50 bg-image-grain opacity-[0.03]" />
+      {/* Grain overlay */}
+      <div className="fixed inset-0 pointer-events-none z-[1] bg-image-grain opacity-[0.04]" />
 
-      {/* Header Navigation */}
-      <nav className="relative z-10 flex items-center justify-between px-6 md:px-12 py-8 max-w-7xl w-full mx-auto">
-        <div className="flex flex-col cursor-pointer" onClick={() => onNavigate('login')}>
-          <span className="text-2xl font-serif tracking-tight leading-none">CVAlign</span>
-          <span className="text-[10px] tracking-[0.4em] uppercase font-bold text-white/40 ml-0.5">Intelligence</span>
+      {/* Top nav — logo center, auth toggles right */}
+      <nav className="relative z-10 flex items-center justify-center px-6 md:px-12 py-8 w-full">
+        <div className="absolute left-6 md:left-12 w-8" aria-hidden />
+        <div className="flex flex-col items-center cursor-pointer" onClick={() => onNavigate('login')}>
+          <span className="text-2xl font-serif tracking-tight leading-none flex items-center gap-1.5">
+            CVAlign
+            <span className="text-[10px] bg-white/10 text-white px-1.5 py-0.5 rounded font-sans tracking-wide not-italic">
+              AI
+            </span>
+          </span>
+          <span className="text-[10px] tracking-[0.4em] uppercase font-bold text-white/40 mt-1">
+            Intelligence
+          </span>
         </div>
-        <div className="flex items-center gap-4 md:gap-8">
-          <span className="text-[11px] uppercase tracking-widest text-white/40 hover:text-white transition-colors cursor-default hidden sm:inline">ATS scoring</span>
-          <span className="text-[11px] uppercase tracking-widest text-white/40 hover:text-white transition-colors cursor-default hidden sm:inline">Refinement</span>
-          <div className="h-4 w-[1px] bg-white/20 hidden sm:inline"></div>
+        <div className="absolute right-6 md:right-12 flex items-center gap-1">
           <button
-            onClick={() => {
-              setIsSignup(!isSignup);
-              setError('');
-            }}
-            className="text-[11px] uppercase tracking-widest font-bold text-white/80 hover:text-white transition-colors cursor-pointer"
+            type="button"
+            onClick={switchToLogin}
+            className={`text-[10px] uppercase tracking-[0.2em] font-semibold px-4 py-2 rounded-md transition-all ${
+              !isSignup
+                ? 'text-white bg-white/10'
+                : 'text-white/45 hover:text-white/70'
+            }`}
           >
-            {isSignup ? 'Login Instead' : 'Create Account'}
+            Login
+          </button>
+          <button
+            type="button"
+            onClick={switchToSignup}
+            className={`text-[10px] uppercase tracking-[0.2em] font-semibold px-4 py-2 rounded-md transition-all ${
+              isSignup
+                ? 'text-white bg-white/10'
+                : 'text-white/45 hover:text-white/70'
+            }`}
+          >
+            Sign Up
           </button>
         </div>
       </nav>
 
-      {/* Main Content Viewport */}
-      <main className="relative z-10 flex-1 grid grid-cols-1 lg:grid-cols-12 items-center px-6 md:px-12 max-w-7xl w-full mx-auto py-12 gap-12">
-        
-        {/* Left Branding/Hero Column */}
-        <div className="lg:col-span-6 lg:pr-12 text-left">
-          <div className="max-w-md">
-            <div className="w-12 h-[1px] bg-white mb-8"></div>
-            <h2 className="text-4xl md:text-5xl font-serif leading-[1.1] mb-6 italic text-white font-light">
-              {isSignup ? 'Build your ATS-grade resume profiles.' : 'Refine your impact with AI analysis.'}
-            </h2>
-            <p className="text-[#A3A3A3] text-sm md:text-base leading-relaxed mb-8">
-              Analyze your resume with ATS-grade intelligence. Turn your documents into high-performance career assets through precision alignment.
-            </p>
-            <div className="flex flex-wrap items-center gap-4 text-[9px] uppercase tracking-[0.2em] font-medium text-white/40">
-              <span>ATS SCORING</span>
-              <span className="w-1 h-1 bg-white/40 rounded-full"></span>
-              <span>KEYWORD EXTRACTION</span>
-              <span className="w-1 h-1 bg-white/40 rounded-full"></span>
-              <span>JOB-FIT INDEX</span>
-            </div>
-          </div>
+      {/* Centered intro + login card */}
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pb-12">
+        <div className="text-center max-w-lg mb-10">
+          <div className="w-12 h-[1px] bg-white/30 mx-auto mb-6" />
+          <h2 className="text-3xl md:text-4xl font-serif leading-[1.15] mb-4 italic text-white font-light">
+            {isSignup
+              ? 'Build your ATS-grade resume profiles.'
+              : 'Refine your impact with AI analysis.'}
+          </h2>
+          <p className="text-[#A3A3A3] text-sm md:text-base leading-relaxed">
+            {isSignup
+              ? 'Join CVAlign AI and start aligning your resume with precision intelligence.'
+              : 'Analyze your resume with ATS-grade intelligence. Turn documents into high-performance career assets.'}
+          </p>
         </div>
 
-        {/* Right Auth Column (Integrated Single-Page Style) */}
-        <div className="lg:col-span-6 flex justify-center lg:justify-end w-full">
-          <div className="w-full max-w-[420px] backdrop-blur-3xl bg-white/[0.03] border border-white/[0.08] p-8 md:p-10 rounded-2xl shadow-2xl relative transition-all duration-300">
-            
-            {/* Tab switch mechanism inside the first page layout */}
-            <div className="flex border-b border-white/[0.08] mb-6">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSignup(false);
-                  setError('');
-                }}
-                className={`flex-1 pb-3 text-[10px] uppercase tracking-[0.2em] font-semibold transition-all cursor-pointer ${
-                  !isSignup ? 'text-white border-b-2 border-white' : 'text-white/40 hover:text-white'
-                }`}
-              >
-                Login Auth
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSignup(true);
-                  setError('');
-                }}
-                className={`flex-1 pb-3 text-[10px] uppercase tracking-[0.2em] font-semibold transition-all cursor-pointer ${
-                  isSignup ? 'text-white border-b-2 border-white' : 'text-white/40 hover:text-white'
-                }`}
-              >
-                Sign Up
-              </button>
+        {/* Glassmorphism login card */}
+        <div
+          className="w-full max-w-[420px] rounded-2xl p-8 md:p-10"
+          style={{
+            background: 'rgba(8, 8, 8, 0.35)',
+            backdropFilter: 'blur(18px)',
+            WebkitBackdropFilter: 'blur(18px)',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            boxShadow:
+              'inset 0 1px 0 0 rgba(255,255,255,0.04), 0 0 48px rgba(0,0,0,0.45), 0 0 1px rgba(255,255,255,0.03)',
+          }}
+        >
+          {!isSignup && (
+            <div className="mb-6 text-center">
+              <h3 className="text-xs uppercase tracking-[0.3em] font-semibold text-white/80 mb-1">
+                Welcome Back
+              </h3>
+              <p className="text-xs text-white/40">Access your CVAlign dashboard to continue.</p>
             </div>
+          )}
 
-            {/* Welcome messages dynamically based on type */}
-            <div className="mb-6">
-              {!isSignup ? (
-                <>
-                  <h3 className="text-xs uppercase tracking-[0.3em] font-semibold text-white/80 mb-2">Welcome Back</h3>
-                  <p className="text-xs text-white/40">Access your CVAlign dashboard to continue your journey.</p>
-                </>
-              ) : (
-                <>
-                  <h3 className="text-xs uppercase tracking-[0.3em] font-semibold text-white/80 mb-2">Create Account</h3>
-                  <p className="text-xs text-white/40">Join our predictive recruitment workspace.</p>
-                </>
-              )}
+          {isSignup && (
+            <div className="mb-6 text-center">
+              <h3 className="text-xs uppercase tracking-[0.3em] font-semibold text-white/80 mb-1">
+                Create Account
+              </h3>
+              <p className="text-xs text-white/40">Join our predictive recruitment workspace.</p>
             </div>
+          )}
 
-            {/* Error Message */}
-            {error && (
-              <div className="mb-6 p-3 bg-[#EF4444]/15 border border-[#EF4444]/30 rounded-lg text-xs text-[#EF4444] text-center flex items-center gap-2 justify-center">
-                <ShieldAlert size={14} className="flex-shrink-0" />
-                <span>{error}</span>
+          {error && (
+            <div className="mb-5 p-3 bg-[#EF4444]/10 border border-[#EF4444]/25 rounded-lg text-xs text-[#EF4444] flex items-center gap-2">
+              <ShieldAlert size={14} className="flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Signup-only: name + confirm password */}
+            {isSignup && (
+              <div className="space-y-1.5">
+                <label className="text-[9px] uppercase tracking-[0.25em] text-white/50 ml-1 block">
+                  Full Name
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-3.5 text-white/30" size={14} />
+                  <input
+                    type="text"
+                    required={isSignup}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className={inputClass}
+                    placeholder="John Doe"
+                  />
+                </div>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Extra SIGNUP input - absolutely hidden/invisible when logging in */}
-              {isSignup && (
-                <div className="space-y-1.5 relative">
-                  <label className="text-[9px] uppercase tracking-[0.25em] text-white/50 ml-1 block">Full Name</label>
-                  <div className="relative font-sans">
-                    <User className="absolute left-3.5 top-3.5 text-white/25" size={14} />
-                    <input
-                      type="text"
-                      required={isSignup}
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg pl-10 pr-4 py-3 text-xs md:text-sm text-white focus:outline-none focus:border-white/30 focus:bg-white/[0.06] transition-all placeholder:text-white/10"
-                      placeholder="John Doe"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Shared field but styled */}
-              <div className="space-y-1.5 relative">
-                <label className="text-[9px] uppercase tracking-[0.25em] text-white/50 ml-1 block">Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-3.5 text-white/25" size={14} />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg pl-10 pr-4 py-3 text-xs md:text-sm text-white focus:outline-none focus:border-white/30 focus:bg-white/[0.06] transition-all placeholder:text-white/10"
-                    placeholder="name@firm.com"
-                  />
-                </div>
+            {/* 1. Email */}
+            <div className="space-y-1.5">
+              <label className="text-[9px] uppercase tracking-[0.25em] text-white/50 ml-1 block">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-3.5 text-white/30" size={14} />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputClass}
+                  placeholder="name@firm.com"
+                />
               </div>
-
-              {/* Shared field */}
-              <div className="space-y-1.5 relative">
-                <label className="text-[9px] uppercase tracking-[0.25em] text-white/50 ml-1 block">Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-3.5 text-white/25" size={14} />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg pl-10 pr-10 py-3 text-xs md:text-sm text-white focus:outline-none focus:border-white/30 focus:bg-white/[0.06] transition-all placeholder:text-white/10"
-                    placeholder="••••••••"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-3.5 text-white/25 hover:text-white transition-colors"
-                  >
-                    {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Extra SIGNUP input - absolutely hidden/invisible when logging in */}
-              {isSignup && (
-                <div className="space-y-1.5 relative">
-                  <label className="text-[9px] uppercase tracking-[0.25em] text-white/50 ml-1 block">Confirm Password</label>
-                  <div className="relative font-sans">
-                    <Lock className="absolute left-3.5 top-3.5 text-white/25" size={14} />
-                    <input
-                      type="password"
-                      required={isSignup}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg pl-10 pr-4 py-3 text-xs md:text-sm text-white focus:outline-none focus:border-white/30 focus:bg-white/[0.06] transition-all placeholder:text-white/10"
-                      placeholder="••••••••"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={isAttemptingLogin}
-                className={`w-full bg-white text-black text-[10px] md:text-[11px] uppercase tracking-[0.2em] font-bold py-4 rounded-lg hover:bg-neutral-200 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] mt-2 ${
-                  isAttemptingLogin ? 'opacity-50 cursor-wait' : 'cursor-pointer'
-                }`}
-              >
-                {isAttemptingLogin
-                  ? 'Connecting...'
-                  : isSignup
-                    ? 'Register Credentials'
-                    : 'Initialize Dashboard'}
-              </button>
-
-              <div className="relative py-1 flex items-center justify-center">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/[0.08]"></div>
-                </div>
-                <span className="relative z-10 px-4 bg-[#080808]/80 text-[8px] tracking-[0.15em] uppercase text-white/30">Or connect via</span>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleGoogleLogin}
-                disabled={isAttemptingLogin}
-                className={`w-full border border-white/10 rounded-lg py-3 flex items-center justify-center gap-3 transition-all text-white ${isAttemptingLogin ? 'opacity-50 cursor-wait' : 'hover:bg-white/[0.05] cursor-pointer'}`}
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                </svg>
-                <span className="text-[10px] uppercase tracking-widest font-semibold">
-                  {isAttemptingLogin ? 'Connecting...' : 'Continue with Google'}
-                </span>
-              </button>
-            </form>
-
-            <div className="mt-6 text-center text-xs text-white/40">
-              {isSignup ? (
-                <>
-                  Already have an account?{' '}
-                  <button
-                    onClick={() => {
-                      setIsSignup(false);
-                      setError('');
-                    }}
-                    className="text-white hover:underline font-medium ml-1 transition-all cursor-pointer"
-                  >
-                    Login
-                  </button>
-                </>
-              ) : (
-                <>
-                  Don't have credentials layout?{' '}
-                  <button
-                    onClick={() => {
-                      setIsSignup(true);
-                      setError('');
-                    }}
-                    className="text-white hover:underline font-medium ml-1 transition-all cursor-pointer"
-                  >
-                    Create Account
-                  </button>
-                </>
-              )}
             </div>
 
-          </div>
+            {/* 2. Password */}
+            <div className="space-y-1.5">
+              <label className="text-[9px] uppercase tracking-[0.25em] text-white/50 ml-1 block">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-3.5 text-white/30" size={14} />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`${inputClass} pr-10`}
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-3.5 text-white/30 hover:text-white/60 transition-colors"
+                >
+                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
+
+            {isSignup && (
+              <div className="space-y-1.5">
+                <label className="text-[9px] uppercase tracking-[0.25em] text-white/50 ml-1 block">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-3.5 text-white/30" size={14} />
+                  <input
+                    type="password"
+                    required={isSignup}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className={inputClass}
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 3. Forgot password (login mode only) */}
+            {!isSignup && (
+              <div className="flex justify-end -mt-1">
+                <button
+                  type="button"
+                  className="text-[10px] uppercase tracking-[0.15em] text-white/40 hover:text-white/70 transition-colors"
+                  onClick={() => setError('Password reset will be available soon via Supabase Auth.')}
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
+
+            {/* 4. LOGIN / Register button */}
+            <button
+              type="submit"
+              disabled={isAttemptingLogin}
+              className="w-full bg-white text-black text-[10px] uppercase tracking-[0.2em] font-bold py-4 rounded-lg hover:bg-neutral-200 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.08)] disabled:opacity-50 disabled:cursor-wait"
+            >
+              {isAttemptingLogin
+                ? 'Connecting...'
+                : isSignup
+                  ? 'Register Credentials'
+                  : 'Login'}
+            </button>
+
+            {/* 5. CREATE NEW ACCOUNT — directly below Login (login mode only) */}
+            {!isSignup && (
+              <button
+                type="button"
+                onClick={switchToSignup}
+                disabled={isAttemptingLogin}
+                className="w-full mt-3 py-3.5 rounded-lg text-[10px] uppercase tracking-[0.2em] font-semibold text-[#F5F5F5] bg-transparent border border-white/[0.18] hover:bg-white/[0.06] hover:shadow-[0_0_24px_rgba(255,255,255,0.06)] transition-all disabled:opacity-50"
+              >
+                Create New Account
+              </button>
+            )}
+
+            {isSignup && (
+              <button
+                type="button"
+                onClick={switchToLogin}
+                disabled={isAttemptingLogin}
+                className="w-full mt-3 py-3.5 rounded-lg text-[10px] uppercase tracking-[0.2em] font-semibold text-[#F5F5F5] bg-transparent border border-white/[0.18] hover:bg-white/[0.06] hover:shadow-[0_0_24px_rgba(255,255,255,0.06)] transition-all disabled:opacity-50"
+              >
+                Back to Login
+              </button>
+            )}
+
+            {/* 6. OR divider */}
+            <div className="relative py-2 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-white/[0.06]" />
+              </div>
+              <span className="relative z-10 px-4 text-[8px] tracking-[0.2em] uppercase text-white/30 bg-transparent">
+                Or
+              </span>
+            </div>
+
+            {/* 7. Continue with Google */}
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={isAttemptingLogin}
+              className="w-full border border-white/[0.10] rounded-lg py-3 flex items-center justify-center gap-3 text-white/90 hover:bg-white/[0.05] hover:border-white/[0.15] transition-all disabled:opacity-50"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+              <span className="text-[10px] uppercase tracking-widest font-semibold">
+                Continue with Google
+              </span>
+            </button>
+          </form>
         </div>
       </main>
 
-      {/* Footer Micro-Metrics */}
-      <footer className="relative z-10 px-6 md:px-12 py-8 border-t border-white/5 flex flex-col sm:flex-row gap-4 justify-between items-center max-w-7xl w-full mx-auto">
-        <div className="flex gap-12">
-          <div className="flex flex-col gap-1 text-left">
-            <span className="text-[9px] uppercase tracking-widest text-white/30">API Backend</span>
-            <span
-              className={`text-[10px] font-mono ${
-                apiOnline === null
-                  ? 'text-white/40'
-                  : apiOnline
-                    ? 'text-[#22C55E]'
-                    : 'text-[#EF4444]'
-              }`}
-            >
-              {apiOnline === null ? 'CHECKING...' : apiOnline ? 'ONLINE :8000' : 'OFFLINE — run backend'}
-            </span>
-          </div>
-          <div className="flex flex-col gap-1 text-left">
-            <span className="text-[9px] uppercase tracking-widest text-white/30">Current Version</span>
-            <span className="text-[10px] font-mono text-white/70">v2.4.0-STABLE</span>
-          </div>
-          <div className="flex flex-col gap-1 text-left">
-            <span className="text-[9px] uppercase tracking-widest text-[#737373]">Security Node</span>
-            <span className="text-[10px] font-mono text-white/70">ENC-SHA-512</span>
-          </div>
-        </div>
-        <div className="flex gap-6 text-[9px] uppercase tracking-widest text-[#737373]">
-          <span className="hover:text-white cursor-pointer">Privacy Protocol</span>
-          <span className="hover:text-white cursor-pointer">Terms of Access</span>
-          <span>&copy; {new Date().getFullYear()} CVALIGN LTD</span>
-        </div>
+      <footer className="relative z-10 px-6 py-6 border-t border-white/[0.04] w-full max-w-7xl mx-auto">
+        <span
+          className={`text-[10px] font-mono uppercase tracking-widest ${
+            apiOnline ? 'text-[#22C55E]/80' : 'text-[#EF4444]/80'
+          }`}
+        >
+          {apiOnline === null
+            ? 'Checking Supabase...'
+            : apiOnline
+              ? 'Supabase configured'
+              : 'Supabase not configured'}
+        </span>
       </footer>
-
-      {/* Subliminal Horizontal Title (Simulating Animation) */}
-      <div className="absolute bottom-24 left-0 w-full overflow-hidden whitespace-nowrap opacity-[0.06] pointer-events-none z-0">
-        <div className="text-[80px] font-black uppercase tracking-[1em] text-white flex gap-12">
-          <span className="animate-pulse">CVALIGN AI</span>
-        </div>
-      </div>
     </div>
   );
 }
-

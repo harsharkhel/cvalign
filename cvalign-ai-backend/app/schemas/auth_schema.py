@@ -28,6 +28,10 @@ class GoogleLoginRequest(BaseModel):
     id_token: str = Field(..., min_length=10)
 
 
+class GoogleTokenRequest(BaseModel):
+    credential: str = Field(..., min_length=10, description="Google Sign-In credential JWT")
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

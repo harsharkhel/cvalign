@@ -53,3 +53,38 @@ class JobMatchResponse(BaseModel):
     matched_skills: List[str]
     missing_skills: List[str]
     recommendation_reason: str
+
+
+class JobRecommendRequest(BaseModel):
+    resume_analysis_id: Optional[int] = None
+    role_preference: str = Field("", max_length=200)
+    location: str = Field("", max_length=100)
+    experience_level: str = Field("", max_length=50)
+    job_type: Optional[str] = None
+    limit: int = Field(10, ge=1, le=20)
+
+
+class JobSaveRequest(BaseModel):
+    job_id: int
+    resume_analysis_id: Optional[int] = None
+
+
+class SavedJobItem(BaseModel):
+    id: int
+    job_id: int
+    title: str
+    company: str
+    location: Optional[str] = None
+    source: str
+    match_score: float
+    matched_skills: List[str]
+    missing_skills: List[str]
+    recommendation_reason: str
+    apply_url: Optional[str] = None
+    is_saved: bool = True
+    created_at: Optional[datetime] = None
+
+
+class SavedJobsResponse(BaseModel):
+    jobs: List[SavedJobItem]
+    total: int

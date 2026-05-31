@@ -12,13 +12,11 @@ from app.utils.rate_limiter import get_user_id_key, limiter
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
-@router.post("", response_model=ChatResponse)
-@limiter.limit("20/minute", key_func=get_user_id_key)
-def send_message(
+def _send_chat_message(
     request: Request,
     data: ChatRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session,
+    current_user: User,
 ):
     record, context = chat(
         db,
@@ -32,6 +30,18 @@ def send_message(
         ai_response=record.ai_response,
         context_summary=context,
     )
+
+
+@router.post("", response_model=ChatResponse)
+@router.post("/message", response_model=ChatResponse)
+@limiter.limit("20/minute", key_func=get_user_id_key)
+def send_message(
+    request: Request,
+    data: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return _send_chat_message(request, data, db, current_user)
 
 
 @router.get("/history", response_model=ChatHistoryResponse)

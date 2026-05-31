@@ -9,7 +9,10 @@ import {
   User,
   LogOut,
   Sparkles,
-  X
+  X,
+  MessageSquare,
+  Briefcase,
+  Bookmark
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,6 +28,9 @@ export default function Sidebar({ currentPage, onNavigate, isOpen, onCloseMobile
     { id: 'analyze', label: 'Analyze Resume', icon: FileSearch },
     { id: 'results', label: 'Results', icon: CheckSquare },
     { id: 'history', label: 'History Analytics', icon: History },
+    { id: 'chat', label: 'AI Chat', icon: MessageSquare },
+    { id: 'jobs', label: 'Job Recommendations', icon: Briefcase },
+    { id: 'saved-jobs', label: 'Saved Jobs', icon: Bookmark },
     { id: 'market-data', label: 'Market Data', icon: Database },
     { id: 'profile', label: 'Profile', icon: User }
   ] as const;

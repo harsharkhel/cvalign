@@ -33,6 +33,7 @@ def init_db():
         job_recommendation,
         job_search_log,
         login_log,
+        resume,
         resume_analysis,
         user,
     )

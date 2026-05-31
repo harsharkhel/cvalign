@@ -13,13 +13,28 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "sqlite:///./cvalign_ai.db"
     JWT_SECRET_KEY: str = "change_this_secret_key"
+    JWT_SECRET: str = ""
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    JWT_EXPIRES_IN: int = 0
 
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_CALLBACK_URL: str = "http://localhost:8000/auth/google/callback"
     FIREBASE_PROJECT_ID: str = ""
     GOOGLE_APPLICATION_CREDENTIALS: str = ""
+
+    EMAIL_HOST: str = ""
+    EMAIL_PORT: int = 587
+    EMAIL_USER: str = ""
+    EMAIL_PASS: str = ""
+    EMAIL_USE_TLS: bool = True
+
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: str = ""
+    GOOGLE_PRIVATE_KEY: str = ""
+    GOOGLE_SHEET_ID: str = ""
+
+    SERPAPI_KEY: str = ""
 
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4.1-mini"
@@ -81,6 +96,20 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.ENV.lower() == "production"
+
+    @property
+    def google_private_key_normalized(self) -> str:
+        if not self.GOOGLE_PRIVATE_KEY:
+            return ""
+        return self.GOOGLE_PRIVATE_KEY.replace("\\n", "\n")
+
+    @property
+    def jwt_secret(self) -> str:
+        return self.JWT_SECRET or self.JWT_SECRET_KEY
+
+    @property
+    def jwt_expires_in_minutes(self) -> int:
+        return self.JWT_EXPIRES_IN or self.ACCESS_TOKEN_EXPIRE_MINUTES
 
 
 @lru_cache

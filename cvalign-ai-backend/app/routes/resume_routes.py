@@ -4,12 +4,18 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.resume import Resume
 from app.models.resume_analysis import ResumeAnalysis
 from app.models.user import User
-from app.schemas.resume_schema import ResumeAnalysisResponse, ResumeHistoryItem, ResumeHistoryResponse
+from app.schemas.resume_schema import (
+    ResumeAnalysisResponse,
+    ResumeHistoryItem,
+    ResumeHistoryResponse,
+    ResumeUploadResponse,
+)
 from app.services.ai_analysis_service import merge_analysis, run_ai_resume_analysis
 from app.services.dashboard_service import refresh_dashboard_snapshot
-from app.services.resume_analyzer import analyze_resume_local
+from app.services.resume_analyzer import analyze_resume_local, extract_skills
 from app.services.resume_parser import save_and_parse_resume
 from app.utils.dependencies import get_current_user
 from app.utils.rate_limiter import get_user_id_key, limiter
@@ -45,6 +51,37 @@ def _analysis_to_response(analysis: ResumeAnalysis) -> ResumeAnalysisResponse:
         resume_strengths=suggestions_data.get("resume_strengths", []),
         resume_weaknesses=suggestions_data.get("resume_weaknesses", []),
         created_at=analysis.created_at,
+    )
+
+
+@router.post("/upload", response_model=ResumeUploadResponse)
+@limiter.limit("10/minute", key_func=get_user_id_key)
+async def upload_resume(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    filename, resume_text = await save_and_parse_resume(file, current_user.user_uuid)
+    skills = extract_skills(resume_text)
+    file_url = f"{current_user.user_uuid}/{filename}"
+
+    resume = Resume(
+        user_id=current_user.id,
+        file_url=file_url,
+        extracted_text=resume_text,
+        parsed_skills_json=skills,
+    )
+    db.add(resume)
+    db.commit()
+    db.refresh(resume)
+
+    return ResumeUploadResponse(
+        id=resume.id,
+        file_url=resume.file_url,
+        parsed_skills=resume.parsed_skills_json or [],
+        extracted_text_length=len(resume_text),
+        created_at=resume.created_at,
     )
 
 

@@ -1,0 +1,32 @@
+# Secrets — never commit
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Python backend
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+cvalign-ai-backend/app/uploads/
+cvalign-ai-backend/*.db
+cvalign-ai-backend/*.xlsx
+
+# Node frontend
+node_modules/
+FRONTEND/dist/
+FRONTEND/build/
+FRONTEND/coverage/
+*.log
+
+# Tools / local
+.tools/

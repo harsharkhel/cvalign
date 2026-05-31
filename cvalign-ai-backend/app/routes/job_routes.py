@@ -5,13 +5,18 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.job import Job
+from app.models.job_recommendation import JobRecommendation
 from app.models.user import User
 from app.schemas.job_schema import (
     JobMatchResponse,
     JobRecommendationItem,
     JobRecommendationsResponse,
+    JobRecommendRequest,
     JobResponse,
+    JobSaveRequest,
     JobSearchResponse,
+    SavedJobItem,
+    SavedJobsResponse,
 )
 from app.services.job_recommendation_service import get_recommendations, match_single_job
 from app.services.job_search_service import job_to_response, search_jobs
@@ -39,6 +44,28 @@ def search(
     )
 
 
+@router.post("/recommend", response_model=JobRecommendationsResponse)
+@limiter.limit("15/minute")
+def recommend_jobs(
+    request: Request,
+    data: JobRecommendRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    recs, message = get_recommendations(
+        db,
+        current_user.id,
+        resume_analysis_id=data.resume_analysis_id,
+        role_preference=data.role_preference,
+        location=data.location,
+        limit=data.limit,
+    )
+    return JobRecommendationsResponse(
+        recommendations=[JobRecommendationItem(**r) for r in recs],
+        message=message or "",
+    )
+
+
 @router.get("/recommendations", response_model=JobRecommendationsResponse)
 def recommendations(
     resume_analysis_id: Optional[int] = Query(None),
@@ -60,6 +87,106 @@ def recommendations(
         recommendations=[JobRecommendationItem(**r) for r in recs],
         message=message or "",
     )
+
+
+@router.post("/save", response_model=SavedJobItem)
+def save_job(
+    data: JobSaveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    job = db.query(Job).filter(Job.id == data.job_id, Job.is_active == True).first()  # noqa: E712
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    existing = (
+        db.query(JobRecommendation)
+        .filter(
+            JobRecommendation.user_id == current_user.id,
+            JobRecommendation.job_id == data.job_id,
+        )
+        .order_by(JobRecommendation.created_at.desc())
+        .first()
+    )
+
+    if existing:
+        existing.is_saved = True
+        db.commit()
+        db.refresh(existing)
+        rec = existing
+    else:
+        match_single_job(db, current_user.id, data.job_id, data.resume_analysis_id)
+        rec = (
+            db.query(JobRecommendation)
+            .filter(
+                JobRecommendation.user_id == current_user.id,
+                JobRecommendation.job_id == data.job_id,
+            )
+            .order_by(JobRecommendation.created_at.desc())
+            .first()
+        )
+        if rec:
+            rec.is_saved = True
+            db.commit()
+            db.refresh(rec)
+
+    if not rec:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Save failed")
+
+    return SavedJobItem(
+        id=rec.id,
+        job_id=job.id,
+        title=job.title,
+        company=job.company,
+        location=job.location,
+        source=job.source,
+        match_score=rec.match_score,
+        matched_skills=rec.matched_skills_json or [],
+        missing_skills=rec.missing_skills_json or [],
+        recommendation_reason=rec.recommendation_reason or "",
+        apply_url=job.apply_url,
+        is_saved=True,
+        created_at=rec.created_at,
+    )
+
+
+@router.get("/saved", response_model=SavedJobsResponse)
+def saved_jobs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    recs = (
+        db.query(JobRecommendation)
+        .filter(
+            JobRecommendation.user_id == current_user.id,
+            JobRecommendation.is_saved == True,  # noqa: E712
+        )
+        .order_by(JobRecommendation.created_at.desc())
+        .all()
+    )
+    items = []
+    for rec in recs:
+        job = db.query(Job).filter(Job.id == rec.job_id).first()
+        if not job:
+            continue
+        items.append(
+            SavedJobItem(
+                id=rec.id,
+                job_id=job.id,
+                title=job.title,
+                company=job.company,
+                location=job.location,
+                source=job.source,
+                match_score=rec.match_score,
+                matched_skills=rec.matched_skills_json or [],
+                missing_skills=rec.missing_skills_json or [],
+                recommendation_reason=rec.recommendation_reason or "",
+                apply_url=job.apply_url,
+                is_saved=True,
+                created_at=rec.created_at,
+            )
+        )
+    return SavedJobsResponse(jobs=items, total=len(items))
 
 
 @router.get("/{job_id}", response_model=JobResponse)

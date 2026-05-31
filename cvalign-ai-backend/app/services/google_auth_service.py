@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models.login_log import LoginLog, LoginProvider, LoginStatus
 from app.models.user import AuthProvider, User
+from app.services.auth_events import handle_auth_success
 from app.services.dashboard_service import create_dashboard_snapshot
 from app.utils.jwt_handler import build_token_payload, create_access_token
 
@@ -135,6 +136,7 @@ def google_login(
         )
 
     user = db.query(User).filter(User.google_sub == firebase_uid).first()
+    is_new = False
     if not user:
         user = db.query(User).filter(User.email == email).first()
 
@@ -152,6 +154,7 @@ def google_login(
         if not user.name and name:
             user.name = name
     else:
+        is_new = True
         user = User(
             name=name,
             email=email,
@@ -168,9 +171,16 @@ def google_login(
     db.commit()
     db.refresh(user)
 
-    create_dashboard_snapshot(db, user.id)
+    if is_new:
+        create_dashboard_snapshot(db, user.id)
 
     _log_google(db, email, LoginStatus.success, user.id, ip_address, device_info)
+    handle_auth_success(
+        name=user.name,
+        email=user.email,
+        auth_provider="google",
+        action="signup" if is_new else "login",
+    )
 
     token = create_access_token(
         build_token_payload(user.id, user.user_uuid, user.email, user.role.value)
